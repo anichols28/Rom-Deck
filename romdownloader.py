@@ -163,12 +163,17 @@ except ImportError:
 
 # Try to import Pillow for box art display, install if needed
 BOXART_AVAILABLE = False
+PIL_ERROR = ""
 try:
     from PIL import Image, ImageTk
+    # Force-load all image plugins (critical for PyInstaller binaries)
+    Image.init()
     BOXART_AVAILABLE = True
-    print(f"PIL loaded OK: Image={Image.__version__ if hasattr(Image, '__version__') else 'yes'}, BOXART_AVAILABLE=True")
-except ImportError:
-    print("PIL import failed, attempting install...")
+    print(f"PIL loaded OK: version={Image.__version__ if hasattr(Image, '__version__') else '?'}, "
+          f"plugins={len(Image.OPEN)}, BOXART_AVAILABLE=True")
+except ImportError as e:
+    PIL_ERROR = str(e)
+    print(f"PIL import failed: {e}")
     print("="*50)
     print("Pillow not found. Attempting automatic installation...")
     print("="*50)
@@ -176,14 +181,18 @@ except ImportError:
                        manual_hint="NOTE: Box art preview will be disabled without Pillow. Everything else works fine."):
         try:
             from PIL import Image, ImageTk
+            Image.init()
             BOXART_AVAILABLE = True
+            PIL_ERROR = ""
             print("Box art support enabled!")
-        except Exception as e:
-            print(f"Installation succeeded but import failed: {e}")
+        except Exception as e2:
+            PIL_ERROR = str(e2)
+            print(f"Installation succeeded but import failed: {e2}")
     else:
         print("Box art preview will be disabled.")
     print("="*50)
 except Exception as e:
+    PIL_ERROR = str(e)
     print(f"PIL import unexpected error: {e}")
 
 class ROMDownloader:
@@ -1776,8 +1785,9 @@ class ROMDownloader:
             self.root.after(0, lambda: self._finalize_boxart(img, art_path, title))
 
         except Exception as e:
+            err_msg = f"Error: {e}"
             print(f"Boxart load error ({art_path}): {e}")
-            self.root.after(0, lambda: self._clear_boxart())
+            self.root.after(0, lambda: self._show_boxart_error(err_msg))
 
     def _finalize_boxart(self, img, art_path, title):
         """Create PhotoImage on main thread and display (tkinter requires this)."""
@@ -1786,8 +1796,9 @@ class ROMDownloader:
             self._boxart_cache[art_path] = photo
             self._show_boxart(photo, title)
         except Exception as e:
+            err_msg = f"PhotoImage: {e}"
             print(f"PhotoImage error: {e}")
-            self._clear_boxart()
+            self._show_boxart_error(err_msg)
 
     def _show_boxart(self, photo, title):
         """Display box art image in the panel."""
@@ -1803,6 +1814,14 @@ class ROMDownloader:
             return
         self._boxart_photo = None
         self.boxart_label.config(image="", text="No art")
+        self.boxart_title.config(text="")
+
+    def _show_boxart_error(self, error_text):
+        """Show an error message in the boxart panel (visible in Gaming Mode)."""
+        if not BOXART_AVAILABLE:
+            return
+        self._boxart_photo = None
+        self.boxart_label.config(image="", text=error_text)
         self.boxart_title.config(text="")
 
     def on_click_release(self, event):
@@ -2759,7 +2778,11 @@ def install_controller_config():
 
 
 if __name__ == "__main__":
-    print(f"ROM Downloader starting - Python {sys.version_info.major}.{sys.version_info.minor}, BOXART_AVAILABLE={BOXART_AVAILABLE}")
+    frozen = getattr(sys, 'frozen', False)
+    print(f"ROM Downloader starting - Python {sys.version_info.major}.{sys.version_info.minor}, "
+          f"frozen={frozen}, BOXART_AVAILABLE={BOXART_AVAILABLE}")
+    if PIL_ERROR:
+        print(f"PIL error was: {PIL_ERROR}")
     auto_update()
     install_controller_config()
     root = tk.Tk()
