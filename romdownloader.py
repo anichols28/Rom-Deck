@@ -2187,6 +2187,27 @@ class ROMDownloader:
         self.cancel_btn.config(state=tk.DISABLED)
 
 
+def _get_ssl_context():
+    """Get an SSL context that works in PyInstaller bundles."""
+    import ssl
+    # Try certifi first (bundled with PyInstaller build)
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        pass
+    # Try system certs at common Linux paths
+    for cert_path in ['/etc/ssl/certs/ca-certificates.crt',
+                      '/etc/pki/tls/certs/ca-bundle.crt']:
+        if os.path.exists(cert_path):
+            return ssl.create_default_context(cafile=cert_path)
+    # Last resort: unverified (still better than no updates)
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
 def auto_update():
     """Check GitHub for a newer binary and self-update if running as a PyInstaller bundle."""
     import urllib.request
@@ -2198,80 +2219,56 @@ def auto_update():
     RELEASE_API = "https://api.github.com/repos/anichols28/Rom-Deck/releases/tags/latest"
     binary_path = Path(sys.executable)
     version_file = binary_path.parent / ".binary_version"
-    debug_log = []
+    ssl_ctx = _get_ssl_context()
 
     try:
-        debug_log.append(f"Binary: {binary_path}")
-        debug_log.append(f"Version file: {version_file}")
-
         # Get release info from GitHub API
         req = urllib.request.Request(RELEASE_API, headers={
             'User-Agent': 'ROMDownloader',
             'Accept': 'application/vnd.github.v3+json',
         })
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10, context=ssl_ctx) as resp:
             release = json.loads(resp.read().decode())
 
         # Find the binary asset download URL
         asset_url = None
         remote_updated = release.get("published_at", "")
-        debug_log.append(f"Remote published_at: {remote_updated}")
-
         for asset in release.get("assets", []):
             if asset["name"] == "romdownloader":
                 asset_url = asset["browser_download_url"]
-                debug_log.append(f"Asset URL: {asset_url}")
-                debug_log.append(f"Asset size: {asset.get('size', '?')} bytes")
                 break
 
         if not asset_url:
-            debug_log.append("No asset named 'romdownloader' found")
             return
 
         # Compare against stored version timestamp
         stored_version = ""
         if version_file.exists():
             stored_version = version_file.read_text().strip()
-        debug_log.append(f"Stored version: '{stored_version}'")
 
         if stored_version == remote_updated:
-            debug_log.append("Already up to date")
-            return
-
-        debug_log.append("Update available, downloading...")
+            return  # Already up to date
 
         # Download new binary to a temp file
         temp_path = binary_path.parent / "romdownloader.update"
         req = urllib.request.Request(asset_url, headers={'User-Agent': 'ROMDownloader'})
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            data = resp.read()
-            debug_log.append(f"Downloaded {len(data)} bytes")
+        with urllib.request.urlopen(req, timeout=120, context=ssl_ctx) as resp:
             with open(temp_path, 'wb') as f:
-                f.write(data)
+                f.write(resp.read())
 
         # Replace current binary with the new one
         os.chmod(str(temp_path), 0o755)
         os.replace(str(temp_path), str(binary_path))
-        debug_log.append("Binary replaced on disk")
 
         # Save the version marker
         version_file.write_text(remote_updated)
-        debug_log.append("Version file written")
 
-        debug_log.append("Restarting via os.execv...")
+        # Restart with the new binary
         os.execv(str(binary_path), sys.argv)
 
-    except Exception as e:
-        debug_log.append(f"ERROR: {type(e).__name__}: {e}")
-        # Show debug info in a popup so we can diagnose
-        try:
-            _root = tk.Tk()
-            _root.withdraw()
-            messagebox.showerror("Auto-Update Debug",
-                                 "\n".join(debug_log))
-            _root.destroy()
-        except Exception:
-            print("\n".join(debug_log))
+    except Exception:
+        # Any failure — just continue with current version
+        pass
 
 
 if __name__ == "__main__":
