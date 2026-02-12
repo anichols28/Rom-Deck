@@ -1574,6 +1574,14 @@ class ROMDownloader:
         """Helper to display loaded files in UI thread"""
         self.all_file_items = file_items  # Cache full unfiltered list
         self._apply_filter_and_display()
+        # Auto-select first item so controller navigation works immediately
+        if self.file_listbox.size() > 0:
+            self.file_listbox.selection_clear(0, tk.END)
+            self.file_listbox.selection_set(0)
+            self.file_listbox.activate(0)
+            self.file_listbox.see(0)
+            self.file_listbox.focus_set()
+            self.on_file_select(None)
     
     def sort_files(self, sort_by):
         """Sort and display files with batch insert for speed"""
