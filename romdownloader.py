@@ -240,6 +240,7 @@ class ROMDownloader:
         self.search_filter = ""
         self.cancel_download_flag = False
         self.current_folder = None
+        self.console_folder = None  # Remembers the console (e.g. "N64") even inside subfolders
         self.recent_connections = []
         self.sort_order = "name"
         self.file_items = []
@@ -1420,8 +1421,10 @@ class ROMDownloader:
     
     def update_console_label(self):
         """Update console folder detection"""
-        if self.current_folder:
-            matching = self.find_matching_console_folder(self.current_folder)
+        # Use console_folder (persists into subfolders) over current_folder
+        folder_to_match = self.console_folder or self.current_folder
+        if folder_to_match:
+            matching = self.find_matching_console_folder(folder_to_match)
             if matching:
                 folder_name = os.path.basename(matching)
                 self.console_label.config(text=f"→ {folder_name}/")
@@ -1449,6 +1452,7 @@ class ROMDownloader:
                 self.network_path = connection_info['path']
                 self.sftp_root_path = connection_info['path']  # Remember root for .metadata
                 self.current_folder = os.path.basename(self.network_path.rstrip('/'))
+                self.console_folder = None  # Reset on new connection
                 self.add_to_recent_connections(path)
                 self.save_settings()
                 self.load_files()
@@ -1470,6 +1474,7 @@ class ROMDownloader:
             self.network_path = path
             self.sftp_root_path = path  # Remember root for .metadata
             self.current_folder = os.path.basename(path)
+            self.console_folder = None  # Reset on new connection
             self.add_to_recent_connections(path)
             self.save_settings()
             print(f"Loading files from: {self.network_path}")
@@ -1859,6 +1864,10 @@ class ROMDownloader:
         else:
             self.network_path = os.path.join(self.network_path, folder_name)
         self.current_folder = folder_name
+        # If this folder matches a console on the destination, remember it.
+        # Otherwise keep the previous console_folder (we're in a subfolder).
+        if self.find_matching_console_folder(folder_name):
+            self.console_folder = folder_name
         if BOXART_AVAILABLE:
             self._clear_boxart()
         self.load_files()
@@ -1910,6 +1919,11 @@ class ROMDownloader:
                 if parent != self.network_path:
                     self.network_path = parent
                     self.current_folder = os.path.basename(parent.rstrip('/')) if parent != '/' else None
+                    # Clear console_folder if we navigated above it
+                    if self.console_folder and not self.find_matching_console_folder(self.console_folder):
+                        self.console_folder = None
+                    elif self.current_folder and self.find_matching_console_folder(self.current_folder):
+                        self.console_folder = self.current_folder
                     self.load_files()
                     self.update_console_label()
                     self.selected_label.config(text="Selected: 0")
@@ -1919,6 +1933,11 @@ class ROMDownloader:
                 if parent != self.network_path:
                     self.network_path = parent
                     self.current_folder = os.path.basename(parent) if parent else None
+                    # Clear console_folder if we navigated above it
+                    if self.console_folder and not self.find_matching_console_folder(self.console_folder):
+                        self.console_folder = None
+                    elif self.current_folder and self.find_matching_console_folder(self.current_folder):
+                        self.console_folder = self.current_folder
                     self.load_files()
                     self.update_console_label()
                     self.selected_label.config(text="Selected: 0")
@@ -1959,8 +1978,10 @@ class ROMDownloader:
             return
 
         download_dest = dest
-        if self.current_folder:
-            matching = self.find_matching_console_folder(self.current_folder)
+        # Use console_folder (persists into subfolders) over current_folder
+        folder_to_match = self.console_folder or self.current_folder
+        if folder_to_match:
+            matching = self.find_matching_console_folder(folder_to_match)
             if matching:
                 download_dest = matching
 
