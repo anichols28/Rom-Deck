@@ -1720,6 +1720,8 @@ class ROMDownloader:
             else:
                 art_path = os.path.join(root, '.metadata', rel, f"{name_no_ext}.png")
 
+        print(f"Boxart lookup: {art_path}")
+
         # Check cache first
         if art_path in self._boxart_cache:
             self._show_boxart(self._boxart_cache[art_path], name_no_ext)
@@ -1730,7 +1732,7 @@ class ROMDownloader:
         thread.start()
 
     def _fetch_boxart(self, art_path, title):
-        """Download box art image in a background thread."""
+        """Load and resize box art image in a background thread."""
         if self.downloading:
             return  # Don't compete with download thread for SFTP access
         try:
@@ -1751,15 +1753,23 @@ class ROMDownloader:
             # Resize to fit the panel (max 260px wide, maintain aspect ratio)
             max_w, max_h = 260, 360
             img.thumbnail((max_w, max_h), Image.LANCZOS)
-            photo = ImageTk.PhotoImage(img)
 
-            # Cache and display on main thread
-            self._boxart_cache[art_path] = photo
-            self.root.after(0, lambda: self._show_boxart(photo, title))
+            # Create PhotoImage on main thread (tkinter is NOT thread-safe)
+            self.root.after(0, lambda: self._finalize_boxart(img, art_path, title))
 
-        except Exception:
-            # No art found or error — clear the panel
+        except Exception as e:
+            print(f"Boxart load error ({art_path}): {e}")
             self.root.after(0, lambda: self._clear_boxart())
+
+    def _finalize_boxart(self, img, art_path, title):
+        """Create PhotoImage on main thread and display (tkinter requires this)."""
+        try:
+            photo = ImageTk.PhotoImage(img)
+            self._boxart_cache[art_path] = photo
+            self._show_boxart(photo, title)
+        except Exception as e:
+            print(f"PhotoImage error: {e}")
+            self._clear_boxart()
 
     def _show_boxart(self, photo, title):
         """Display box art image in the panel."""
