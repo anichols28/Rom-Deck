@@ -2275,7 +2275,7 @@ if __name__ == "__main__":
     auto_update()
     root = tk.Tk()
     root.withdraw()
-    messagebox.showinfo("TEST", "TESTING AGAIN")
+    messagebox.showinfo("TEST", "UPDATE WORKS!")
     root.deiconify()
     app = ROMDownloader(root)
     root.mainloop()
