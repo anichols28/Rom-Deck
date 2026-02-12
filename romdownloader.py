@@ -2259,7 +2259,7 @@ if __name__ == "__main__":
     auto_update()
     root = tk.Tk()
     root.withdraw()
-    messagebox.showinfo("TEST", "TEST")
+    messagebox.showinfo("TEST", "TESTING AGAIN")
     root.deiconify()
     app = ROMDownloader(root)
     root.mainloop()
