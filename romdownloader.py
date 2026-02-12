@@ -2759,16 +2759,21 @@ def install_controller_config():
 
 
 if __name__ == "__main__":
-    # On Linux (Steam Deck), redirect stdout/stderr to a log file
-    # so debug output is captured (no terminal in Gaming Mode)
-    if platform.system() == "Linux":
-        log_path = Path.home() / ".rom_downloader.log"
+    # Redirect stdout/stderr to a log file for debugging
+    # Try /tmp first (always writable), fall back to home directory
+    for _log_candidate in ["/tmp/rom_downloader.log",
+                           str(Path.home() / "rom_downloader.log")]:
         try:
-            log_file = open(log_path, 'w')
-            sys.stdout = log_file
-            sys.stderr = log_file
+            _log_file = open(_log_candidate, 'w')
+            sys.stdout = _log_file
+            sys.stderr = _log_file
+            print(f"Log started: {_log_candidate}")
+            print(f"Python: {sys.version}")
+            print(f"Frozen: {getattr(sys, 'frozen', False)}")
+            print(f"Platform: {platform.system()}")
+            break
         except Exception:
-            pass
+            continue
 
     auto_update()
     install_controller_config()
