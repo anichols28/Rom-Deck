@@ -2190,7 +2190,6 @@ class ROMDownloader:
 def auto_update():
     """Check GitHub for a newer binary and self-update if running as a PyInstaller bundle."""
     import urllib.request
-    import urllib.error
 
     # Only self-update when running as a frozen binary (PyInstaller)
     if not getattr(sys, 'frozen', False):
@@ -2199,60 +2198,80 @@ def auto_update():
     RELEASE_API = "https://api.github.com/repos/anichols28/Rom-Deck/releases/tags/latest"
     binary_path = Path(sys.executable)
     version_file = binary_path.parent / ".binary_version"
+    debug_log = []
 
     try:
+        debug_log.append(f"Binary: {binary_path}")
+        debug_log.append(f"Version file: {version_file}")
+
         # Get release info from GitHub API
         req = urllib.request.Request(RELEASE_API, headers={
             'User-Agent': 'ROMDownloader',
             'Accept': 'application/vnd.github.v3+json',
         })
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:
             release = json.loads(resp.read().decode())
 
         # Find the binary asset download URL
         asset_url = None
         remote_updated = release.get("published_at", "")
+        debug_log.append(f"Remote published_at: {remote_updated}")
+
         for asset in release.get("assets", []):
             if asset["name"] == "romdownloader":
                 asset_url = asset["browser_download_url"]
+                debug_log.append(f"Asset URL: {asset_url}")
+                debug_log.append(f"Asset size: {asset.get('size', '?')} bytes")
                 break
 
         if not asset_url:
+            debug_log.append("No asset named 'romdownloader' found")
             return
 
         # Compare against stored version timestamp
         stored_version = ""
         if version_file.exists():
             stored_version = version_file.read_text().strip()
+        debug_log.append(f"Stored version: '{stored_version}'")
 
         if stored_version == remote_updated:
-            return  # Already up to date
+            debug_log.append("Already up to date")
+            return
 
-        print("Update available, downloading...")
+        debug_log.append("Update available, downloading...")
 
         # Download new binary to a temp file
         temp_path = binary_path.parent / "romdownloader.update"
         req = urllib.request.Request(asset_url, headers={'User-Agent': 'ROMDownloader'})
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = resp.read()
+            debug_log.append(f"Downloaded {len(data)} bytes")
             with open(temp_path, 'wb') as f:
-                f.write(resp.read())
+                f.write(data)
 
         # Replace current binary with the new one
-        # On Linux, the running process keeps the old file in memory
         os.chmod(str(temp_path), 0o755)
         os.replace(str(temp_path), str(binary_path))
+        debug_log.append("Binary replaced on disk")
 
         # Save the version marker
         version_file.write_text(remote_updated)
+        debug_log.append("Version file written")
 
-        print("Update complete. Restarting...")
+        debug_log.append("Restarting via os.execv...")
         os.execv(str(binary_path), sys.argv)
 
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError, json.JSONDecodeError):
-        # No internet, API error, or filesystem issue — just continue with current version
-        pass
     except Exception as e:
-        print(f"Update check failed: {e}")
+        debug_log.append(f"ERROR: {type(e).__name__}: {e}")
+        # Show debug info in a popup so we can diagnose
+        try:
+            _root = tk.Tk()
+            _root.withdraw()
+            messagebox.showerror("Auto-Update Debug",
+                                 "\n".join(debug_log))
+            _root.destroy()
+        except Exception:
+            print("\n".join(debug_log))
 
 
 if __name__ == "__main__":
