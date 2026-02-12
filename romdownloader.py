@@ -2759,22 +2759,7 @@ def install_controller_config():
 
 
 if __name__ == "__main__":
-    # Redirect stdout/stderr to a log file for debugging
-    # Try /tmp first (always writable), fall back to home directory
-    for _log_candidate in ["/tmp/rom_downloader.log",
-                           str(Path.home() / "rom_downloader.log")]:
-        try:
-            _log_file = open(_log_candidate, 'w')
-            sys.stdout = _log_file
-            sys.stderr = _log_file
-            print(f"Log started: {_log_candidate}")
-            print(f"Python: {sys.version}")
-            print(f"Frozen: {getattr(sys, 'frozen', False)}")
-            print(f"Platform: {platform.system()}")
-            break
-        except Exception:
-            continue
-
+    print(f"ROM Downloader starting - Python {sys.version_info.major}.{sys.version_info.minor}, BOXART_AVAILABLE={BOXART_AVAILABLE}")
     auto_update()
     install_controller_config()
     root = tk.Tk()
