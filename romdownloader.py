@@ -2258,5 +2258,8 @@ def auto_update():
 if __name__ == "__main__":
     auto_update()
     root = tk.Tk()
+    root.withdraw()
+    messagebox.showinfo("TEST", "TEST")
+    root.deiconify()
     app = ROMDownloader(root)
     root.mainloop()
