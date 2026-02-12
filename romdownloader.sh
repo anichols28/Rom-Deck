@@ -63,11 +63,18 @@ if command -v git &> /dev/null; then
     # If not a git repo yet (e.g. downloaded as zip), initialize it
     if [ ! -d "$SCRIPT_DIR/.git" ]; then
         echo "Setting up auto-updates..."
-        git init -q
-        git remote add origin "$REPO_URL" 2>/dev/null
-        git fetch -q origin main 2>/dev/null
-        git reset --mixed origin/main 2>/dev/null
-        echo "Auto-updates enabled."
+        # Clone to a temp dir, then move .git into place
+        TEMP_CLONE=$(mktemp -d)
+        if git clone -q "$REPO_URL" "$TEMP_CLONE" 2>/dev/null; then
+            mv "$TEMP_CLONE/.git" "$SCRIPT_DIR/.git"
+            rm -rf "$TEMP_CLONE"
+            # Reset index to match working tree (don't delete any files)
+            git -C "$SCRIPT_DIR" checkout -- . 2>/dev/null
+            echo "Auto-updates enabled."
+        else
+            rm -rf "$TEMP_CLONE"
+            echo "Could not set up auto-updates (no internet?)"
+        fi
     else
         # Already a git repo - pull latest changes
         echo "Checking for updates..."
