@@ -62,25 +62,49 @@ fi
 
 # --- Launch the app ---
 
-# Option 1: Pre-built binary (no Python/pip/dependencies needed)
 BINARY="$SCRIPT_DIR/romdownloader"
+VERSION_FILE="$SCRIPT_DIR/.binary_version"
+NEED_DOWNLOAD=false
+
+# Check if binary needs updating
 if [ -f "$BINARY" ] && [ -x "$BINARY" ]; then
-    echo "Launching ROM Downloader..."
-    exec "$BINARY"
+    # Compare stored version against current git commit
+    if [ -d "$SCRIPT_DIR/.git" ]; then
+        CURRENT_SHA="$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null)"
+        STORED_SHA=""
+        [ -f "$VERSION_FILE" ] && STORED_SHA="$(cat "$VERSION_FILE" 2>/dev/null)"
+        if [ -n "$CURRENT_SHA" ] && [ "$CURRENT_SHA" != "$STORED_SHA" ]; then
+            echo "Update available, downloading new binary..."
+            NEED_DOWNLOAD=true
+        fi
+    fi
+    # Launch if no update needed
+    if [ "$NEED_DOWNLOAD" = false ]; then
+        echo "Launching ROM Downloader..."
+        exec "$BINARY"
+    fi
+else
+    NEED_DOWNLOAD=true
 fi
 
-# Binary not found - try to download it
-echo "Downloading ROM Downloader binary..."
-if command -v curl &> /dev/null; then
-    curl -sL -o "$BINARY" "$BINARY_URL" 2>/dev/null
-elif command -v wget &> /dev/null; then
-    wget -q -O "$BINARY" "$BINARY_URL" 2>/dev/null
-fi
+# Download binary (first time or update)
+if [ "$NEED_DOWNLOAD" = true ]; then
+    echo "Downloading ROM Downloader binary..."
+    if command -v curl &> /dev/null; then
+        curl -sL -o "$BINARY" "$BINARY_URL" 2>/dev/null
+    elif command -v wget &> /dev/null; then
+        wget -q -O "$BINARY" "$BINARY_URL" 2>/dev/null
+    fi
 
-if [ -f "$BINARY" ]; then
-    chmod +x "$BINARY"
-    echo "Download complete. Launching..."
-    exec "$BINARY"
+    if [ -f "$BINARY" ]; then
+        chmod +x "$BINARY"
+        # Store the current commit SHA so we know when to update next
+        if [ -d "$SCRIPT_DIR/.git" ]; then
+            git -C "$SCRIPT_DIR" rev-parse HEAD > "$VERSION_FILE" 2>/dev/null
+        fi
+        echo "Download complete. Launching..."
+        exec "$BINARY"
+    fi
 fi
 
 # Option 2: Fall back to Python (for development or if download failed)
