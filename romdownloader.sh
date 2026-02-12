@@ -57,5 +57,30 @@ fi
 # Change to script directory so relative paths work
 cd "$SCRIPT_DIR"
 
+# Auto-update from GitHub
+REPO_URL="https://github.com/anichols28/Rom-Deck.git"
+if command -v git &> /dev/null; then
+    # If not a git repo yet (e.g. downloaded as zip), initialize it
+    if [ ! -d "$SCRIPT_DIR/.git" ]; then
+        echo "Setting up auto-updates..."
+        git init -q
+        git remote add origin "$REPO_URL" 2>/dev/null
+        git fetch -q origin main 2>/dev/null
+        git reset --mixed origin/main 2>/dev/null
+        echo "Auto-updates enabled."
+    else
+        # Already a git repo - pull latest changes
+        echo "Checking for updates..."
+        git pull -q origin main 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo "Up to date."
+        else
+            echo "Update check failed (no internet?) - launching anyway."
+        fi
+    fi
+else
+    echo "git not installed - skipping update check."
+fi
+
 # Run the Python script
 python3 "$SCRIPT_DIR/romdownloader.py"
