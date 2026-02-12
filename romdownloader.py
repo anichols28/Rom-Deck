@@ -54,13 +54,44 @@ def install_package(pip_name, pacman_name=None, manual_hint=None):
     pacman_name:  Arch/SteamOS package name (e.g. 'python-paramiko', 'python-pillow')
     manual_hint:  extra text shown if all methods fail
     """
-    methods = []
+    # On SteamOS, try pacman with read-only filesystem handling
     if pacman_name:
-        methods.append(
-            (["sudo", "pacman", "-Syu", "--noconfirm", "--overwrite", "*",
-              "--disable-download-timeout", pacman_name], "Steam Deck pacman (requires sudo)")
-        )
-    methods += [
+        try:
+            print("Trying Steam Deck pacman (with filesystem unlock)...")
+            # Disable read-only filesystem
+            subprocess.run(["sudo", "steamos-readonly", "disable"],
+                           capture_output=True, text=True, timeout=10)
+            # Init pacman keys if needed
+            subprocess.run(["sudo", "pacman-key", "--init"],
+                           capture_output=True, text=True, timeout=30)
+            subprocess.run(["sudo", "pacman-key", "--populate", "archlinux"],
+                           capture_output=True, text=True, timeout=30)
+            # Install the package
+            result = subprocess.run(
+                ["sudo", "pacman", "-Syu", "--noconfirm", "--overwrite", "*",
+                 "--disable-download-timeout", pacman_name],
+                capture_output=True, text=True, timeout=120)
+            # Re-enable read-only filesystem
+            subprocess.run(["sudo", "steamos-readonly", "enable"],
+                           capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                print(f"✓ {pip_name} installed successfully using pacman!")
+                return True
+            else:
+                print(f"✗ pacman failed: {result.stderr.strip()}")
+        except FileNotFoundError:
+            print("✗ Not a SteamOS system, skipping pacman")
+        except subprocess.TimeoutExpired:
+            print("✗ pacman - timeout")
+            # Re-enable read-only even on timeout
+            subprocess.run(["sudo", "steamos-readonly", "enable"],
+                           capture_output=True, text=True, timeout=10)
+        except Exception as e:
+            print(f"✗ pacman - error: {e}")
+            subprocess.run(["sudo", "steamos-readonly", "enable"],
+                           capture_output=True, text=True, timeout=10)
+
+    methods = [
         (["python3", "-m", "pip", "install", "--user", "--break-system-packages", pip_name], "python3 with --break-system-packages"),
         (["python3", "-m", "pip", "install", "--user", pip_name], "python3 with --user"),
         ([sys.executable, "-m", "pip", "install", "--user", "--break-system-packages", pip_name], "current python with --break-system-packages"),
@@ -90,9 +121,17 @@ def install_package(pip_name, pacman_name=None, manual_hint=None):
     print(f"\n  === For Steam Deck (Desktop Mode) ===")
     print(f"  Open Konsole and run:")
     if pacman_name:
+        print(f"     sudo steamos-readonly disable")
+        print(f"     sudo pacman-key --init")
+        print(f"     sudo pacman-key --populate archlinux")
         print(f"     sudo pacman -S {pacman_name}")
-    print(f"     pip install --user {pip_name}")
-    print(f"\n  === For Windows/Linux PC ===")
+        print(f"     sudo steamos-readonly enable")
+    else:
+        print(f"     pip install --user {pip_name}")
+    print(f"\n  === For Linux PC ===")
+    print(f"     sudo apt install python3-{pip_name.lower()}  (Debian/Ubuntu)")
+    print(f"     pip install --user {pip_name}  (other distros)")
+    print(f"\n  === For Windows ===")
     print(f"     pip install {pip_name}")
     if manual_hint:
         print(f"\n  {manual_hint}")
