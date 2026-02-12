@@ -166,22 +166,25 @@ BOXART_AVAILABLE = False
 try:
     from PIL import Image, ImageTk
     BOXART_AVAILABLE = True
+    print(f"PIL loaded OK: Image={Image.__version__ if hasattr(Image, '__version__') else 'yes'}, BOXART_AVAILABLE=True")
 except ImportError:
-    print("\n" + "="*50)
+    print("PIL import failed, attempting install...")
+    print("="*50)
     print("Pillow not found. Attempting automatic installation...")
-    print("="*50 + "\n")
+    print("="*50)
     if install_package("Pillow", pacman_name="python-pillow",
                        manual_hint="NOTE: Box art preview will be disabled without Pillow. Everything else works fine."):
         try:
             from PIL import Image, ImageTk
             BOXART_AVAILABLE = True
-            print("\n✓ Box art support enabled!")
-        except:
-            print("\n⚠ Installation succeeded but import failed.")
-            print("  Please close and restart the application.")
+            print("Box art support enabled!")
+        except Exception as e:
+            print(f"Installation succeeded but import failed: {e}")
     else:
-        print("\n⚠ Box art preview will be disabled.")
-    print("="*50 + "\n")
+        print("Box art preview will be disabled.")
+    print("="*50)
+except Exception as e:
+    print(f"PIL import unexpected error: {e}")
 
 class ROMDownloader:
     def __init__(self, root):
@@ -1720,7 +1723,7 @@ class ROMDownloader:
             else:
                 art_path = os.path.join(root, '.metadata', rel, f"{name_no_ext}.png")
 
-        print(f"Boxart lookup: {art_path}")
+        print(f"Boxart lookup: conn={self.connection_type} root={self.sftp_root_path} current={self.network_path} art={art_path}")
 
         # Check cache first
         if art_path in self._boxart_cache:
@@ -1739,16 +1742,31 @@ class ROMDownloader:
             if self.connection_type == "sftp":
                 if not self.sftp_client:
                     return
-                # Read image data into memory (lock prevents conflict with file listing)
+                # Check if the metadata file exists on SFTP before reading
                 with self._sftp_lock:
-                    with self.sftp_client.file(art_path, 'r') as f:
+                    try:
+                        self.sftp_client.stat(art_path)
+                    except FileNotFoundError:
+                        print(f"Boxart SFTP not found: {art_path}")
+                        self.root.after(0, lambda: self._clear_boxart())
+                        return
+                    except IOError as e:
+                        print(f"Boxart SFTP stat error: {art_path}: {e}")
+                        self.root.after(0, lambda: self._clear_boxart())
+                        return
+                    # Read image data in binary mode
+                    with self.sftp_client.file(art_path, 'rb') as f:
+                        f.prefetch()
                         img_data = f.read()
+                print(f"Boxart SFTP read OK: {len(img_data)} bytes from {art_path}")
                 img = Image.open(io.BytesIO(img_data))
             else:
                 if not os.path.exists(art_path):
+                    print(f"Boxart local not found: {art_path}")
                     self.root.after(0, lambda: self._clear_boxart())
                     return
                 img = Image.open(art_path)
+                print(f"Boxart local read OK: {art_path}")
 
             # Resize to fit the panel (max 260px wide, maintain aspect ratio)
             max_w, max_h = 260, 360
@@ -2741,6 +2759,17 @@ def install_controller_config():
 
 
 if __name__ == "__main__":
+    # When running as a PyInstaller binary, redirect stdout/stderr to a log file
+    # so debug output is captured (no terminal in Steam Deck Gaming Mode)
+    if getattr(sys, 'frozen', False):
+        log_path = Path.home() / ".rom_downloader.log"
+        try:
+            log_file = open(log_path, 'w')
+            sys.stdout = log_file
+            sys.stderr = log_file
+        except Exception:
+            pass
+
     auto_update()
     install_controller_config()
     root = tk.Tk()
