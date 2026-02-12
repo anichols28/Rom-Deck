@@ -1,0 +1,75 @@
+name: Build Linux Binary
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build binary
+        run: |
+          pyinstaller --onefile --strip --name romdownloader \
+            --hidden-import paramiko \
+            --hidden-import PIL \
+            --hidden-import PIL.Image \
+            --hidden-import PIL.ImageTk \
+            --hidden-import tkinter \
+            --hidden-import tkinter.ttk \
+            --hidden-import tkinter.filedialog \
+            --hidden-import tkinter.messagebox \
+            romdownloader.py
+
+      - name: Verify binary exists
+        run: |
+          ls -lh dist/romdownloader
+          file dist/romdownloader
+
+      - name: Get short SHA
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Delete existing 'latest' release
+        run: gh release delete latest --yes 2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create/update 'latest' release
+        run: |
+          gh release create latest \
+            --title "ROM Downloader (latest build)" \
+            --notes "Auto-built from commit ${{ steps.sha.outputs.short }}. Download **romdownloader** below and run:
+          \`\`\`
+          chmod +x romdownloader
+          ./romdownloader
+          \`\`\`
+          No Python or dependencies needed." \
+            --prerelease \
+            dist/romdownloader
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
