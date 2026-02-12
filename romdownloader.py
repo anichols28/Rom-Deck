@@ -1743,14 +1743,25 @@ class ROMDownloader:
                 rel = current[len(root):].strip('/')
             else:
                 rel = ""
-            art_path = f"{root}/.metadata/{rel}/{name_no_ext}.png" if rel else f"{root}/.metadata/{name_no_ext}.png"
+            # Metadata is stored flat by system: .metadata/<system>/file.png
+            # When browsing a country subfolder like N64/(Japan), use only
+            # the first path component (the system name) for the art lookup.
+            if rel:
+                system_name = rel.split('/')[0]
+            else:
+                system_name = ""
+            art_path = f"{root}/.metadata/{system_name}/{name_no_ext}.png" if system_name else f"{root}/.metadata/{name_no_ext}.png"
         else:
             root = self.sftp_root_path
             rel = os.path.relpath(self.network_path, root)
+            # Metadata is stored flat by system: .metadata\<system>\file.png
+            # When browsing a country subfolder like N64\(Japan), use only
+            # the first path component (the system name) for the art lookup.
             if rel == '.':
                 art_path = os.path.join(root, '.metadata', f"{name_no_ext}.png")
             else:
-                art_path = os.path.join(root, '.metadata', rel, f"{name_no_ext}.png")
+                system_name = rel.split(os.sep)[0]
+                art_path = os.path.join(root, '.metadata', system_name, f"{name_no_ext}.png")
 
         print(f"Boxart lookup: conn={self.connection_type} root={self.sftp_root_path} current={self.network_path} art={art_path}")
 
