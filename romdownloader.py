@@ -2759,9 +2759,9 @@ def install_controller_config():
 
 
 if __name__ == "__main__":
-    # When running as a PyInstaller binary, redirect stdout/stderr to a log file
-    # so debug output is captured (no terminal in Steam Deck Gaming Mode)
-    if getattr(sys, 'frozen', False):
+    # On Linux (Steam Deck), redirect stdout/stderr to a log file
+    # so debug output is captured (no terminal in Gaming Mode)
+    if platform.system() == "Linux":
         log_path = Path.home() / ".rom_downloader.log"
         try:
             log_file = open(log_path, 'w')
