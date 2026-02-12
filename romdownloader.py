@@ -2306,8 +2306,425 @@ def auto_update():
         pass
 
 
+def install_controller_config():
+    """Install Steam Deck controller template if running on a system with Steam."""
+    steam_paths = [
+        Path.home() / ".local" / "share" / "Steam",
+        Path.home() / ".steam" / "steam",
+    ]
+
+    steam_path = None
+    for p in steam_paths:
+        if p.is_dir():
+            steam_path = p
+            break
+
+    if not steam_path:
+        return  # Not a Steam system
+
+    dest_dir = steam_path / "controller_base" / "templates"
+    dest_file = dest_dir / "rom_downloader_default.vdf"
+
+    if dest_file.exists():
+        return  # Already installed
+
+    # Check for external VDF file first (next to binary or script)
+    if getattr(sys, 'frozen', False):
+        app_dir = Path(sys.executable).parent
+    else:
+        app_dir = Path(__file__).parent
+
+    external_vdf = app_dir / "controller_config.vdf"
+    if external_vdf.exists():
+        vdf_content = external_vdf.read_text()
+    else:
+        # Embedded VDF content as fallback
+        vdf_content = '''"controller_mappings"
+{
+\t"version"\t\t"3"
+\t"revision"\t\t"2"
+\t"title"\t\t"ROM Downloader"
+\t"description"\t\t"Controller layout for ROM Downloader on Steam Deck"
+\t"creator"\t\t"0"
+\t"controller_type"\t\t"controller_neptune"
+\t"controller_caps"\t\t"23117823"
+\t"export_type"\t\t"personal_local"
+\t"group"
+\t{
+\t\t"id"\t\t"0"
+\t\t"mode"\t\t"four_buttons"
+\t\t"name"\t\t"Face Buttons"
+\t\t"inputs"
+\t\t{
+\t\t\t"button_a"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press RETURN, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t\t"button_b"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press ESCAPE, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t\t"button_x"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press F2, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t\t"button_y"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press TAB, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t}
+\t}
+\t"group"
+\t{
+\t\t"id"\t\t"1"
+\t\t"mode"\t\t"dpad"
+\t\t"name"\t\t"D-Pad Arrow Keys"
+\t\t"inputs"
+\t\t{
+\t\t\t"dpad_north"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press UP_ARROW, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t\t"dpad_south"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press DOWN_ARROW, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t\t"dpad_west"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press LEFT_ARROW, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t\t"dpad_east"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press RIGHT_ARROW, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t}
+\t}
+\t"group"
+\t{
+\t\t"id"\t\t"2"
+\t\t"mode"\t\t"absolute_mouse"
+\t\t"name"\t\t"Right Trackpad Mouse"
+\t\t"inputs"
+\t\t{
+\t\t\t"click"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"mouse_button LEFT, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t}
+\t\t"settings"
+\t\t{
+\t\t\t"haptic_intensity"\t\t"2"
+\t\t}
+\t}
+\t"group"
+\t{
+\t\t"id"\t\t"3"
+\t\t"mode"\t\t"joystick_mouse"
+\t\t"name"\t\t"Left Stick Mouse"
+\t\t"inputs"
+\t\t{
+\t\t\t"click"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"mouse_button LEFT, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t}
+\t}
+\t"group"
+\t{
+\t\t"id"\t\t"4"
+\t\t"mode"\t\t"trigger"
+\t\t"name"\t\t"Left Trigger"
+\t\t"inputs"
+\t\t{
+\t\t\t"click"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press F3, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t}
+\t}
+\t"group"
+\t{
+\t\t"id"\t\t"5"
+\t\t"mode"\t\t"trigger"
+\t\t"name"\t\t"Right Trigger"
+\t\t"inputs"
+\t\t{
+\t\t\t"click"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press F4, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t}
+\t}
+\t"group"
+\t{
+\t\t"id"\t\t"6"
+\t\t"mode"\t\t"switches"
+\t\t"name"\t\t"System Buttons"
+\t\t"inputs"
+\t\t{
+\t\t\t"button_escape"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press ESCAPE, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t\t"button_back_left"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press F3, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t\t"button_back_right"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press F4, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t}
+\t}
+\t"group"
+\t{
+\t\t"id"\t\t"7"
+\t\t"mode"\t\t"dpad"
+\t\t"name"\t\t"Left Trackpad D-Pad"
+\t\t"inputs"
+\t\t{
+\t\t\t"dpad_north"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press UP_ARROW, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t\t"dpad_south"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press DOWN_ARROW, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t\t"dpad_west"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press LEFT_ARROW, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t\t"dpad_east"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"key_press RIGHT_ARROW, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t}
+\t}
+\t"group"
+\t{
+\t\t"id"\t\t"8"
+\t\t"mode"\t\t"joystick_mouse"
+\t\t"name"\t\t"Right Joystick Mouse"
+\t\t"inputs"
+\t\t{
+\t\t\t"click"
+\t\t\t{
+\t\t\t\t"activators"
+\t\t\t\t{
+\t\t\t\t\t"Full_Press"
+\t\t\t\t\t{
+\t\t\t\t\t\t"bindings"
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\t"binding"\t\t"mouse_button LEFT, , "
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t}
+\t}
+\t"preset"
+\t{
+\t\t"id"\t\t"0"
+\t\t"name"\t\t"Default"
+\t\t"group_source_bindings"
+\t\t{
+\t\t\t"0"\t\t"button_diamond active"
+\t\t\t"1"\t\t"dpad active"
+\t\t\t"2"\t\t"right_trackpad active"
+\t\t\t"3"\t\t"joystick active"
+\t\t\t"4"\t\t"left_trigger active"
+\t\t\t"5"\t\t"right_trigger active"
+\t\t\t"6"\t\t"switch active"
+\t\t\t"7"\t\t"left_trackpad active"
+\t\t\t"8"\t\t"right_joystick active"
+\t\t}
+\t}
+}
+'''
+
+    try:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_file.write_text(vdf_content)
+        print("Controller config installed to Steam templates.")
+    except Exception:
+        pass  # Non-critical, silently continue
+
+
 if __name__ == "__main__":
     auto_update()
+    install_controller_config()
     root = tk.Tk()
     app = ROMDownloader(root)
     root.mainloop()
