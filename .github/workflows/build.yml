@@ -37,6 +37,8 @@ jobs:
           pyinstaller --onefile --strip --name romdownloader \
             --hidden-import paramiko \
             --collect-all Pillow \
+            --hidden-import PIL._tkinter_finder \
+            --hidden-import _tkinter \
             --hidden-import tkinter \
             --hidden-import tkinter.ttk \
             --hidden-import tkinter.filedialog \

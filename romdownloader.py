@@ -164,12 +164,27 @@ except ImportError:
 # Try to import Pillow for box art display, install if needed
 BOXART_AVAILABLE = False
 PIL_ERROR = ""
+
+# Workaround: PyInstaller may not bundle PIL._tkinter_finder properly.
+# Pre-import it or create a stub so ImageTk doesn't crash.
+try:
+    import PIL._tkinter_finder
+except Exception:
+    try:
+        import types
+        import PIL
+        PIL._tkinter_finder = types.ModuleType("PIL._tkinter_finder")
+        sys.modules["PIL._tkinter_finder"] = PIL._tkinter_finder
+        print("PIL._tkinter_finder not found, using stub")
+    except ImportError:
+        pass  # PIL itself not installed, will be handled below
+
 try:
     from PIL import Image, ImageTk
     # Force-load all image plugins (critical for PyInstaller binaries)
     Image.init()
     BOXART_AVAILABLE = True
-    print(f"PIL loaded OK: version={Image.__version__ if hasattr(Image, '__version__') else '?'}, "
+    print(f"PIL loaded OK: version={Image.__version__  if hasattr(Image, '__version__') else '?'}, "
           f"plugins={len(Image.OPEN)}, BOXART_AVAILABLE=True")
 except ImportError as e:
     PIL_ERROR = str(e)
