@@ -1,7 +1,7 @@
 "controller_mappings"
 {
 	"version"		"3"
-	"revision"		"1"
+	"revision"		"2"
 	"title"		"ROM Downloader"
 	"description"		"Controller layout for ROM Downloader on Steam Deck"
 	"creator"		"0"
@@ -36,7 +36,7 @@
 					{
 						"bindings"
 						{
-							"binding"		"key_press F1, , "
+							"binding"		"key_press ESCAPE, , "
 						}
 					}
 				}
@@ -73,7 +73,7 @@
 	{
 		"id"		"1"
 		"mode"		"dpad"
-		"name"		"D-Pad"
+		"name"		"D-Pad Arrow Keys"
 		"inputs"
 		{
 			"dpad_north"
@@ -268,7 +268,16 @@
 					}
 				}
 			}
-			"button_capture"
+		}
+	}
+	"group"
+	{
+		"id"		"7"
+		"mode"		"dpad"
+		"name"		"Left Trackpad D-Pad"
+		"inputs"
+		{
+			"dpad_north"
 			{
 				"activators"
 				{
@@ -276,7 +285,68 @@
 					{
 						"bindings"
 						{
-							"binding"		"controller_action system_key_1, , "
+							"binding"		"key_press UP_ARROW, , "
+						}
+					}
+				}
+			}
+			"dpad_south"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"key_press DOWN_ARROW, , "
+						}
+					}
+				}
+			}
+			"dpad_west"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"key_press LEFT_ARROW, , "
+						}
+					}
+				}
+			}
+			"dpad_east"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"key_press RIGHT_ARROW, , "
+						}
+					}
+				}
+			}
+		}
+	}
+	"group"
+	{
+		"id"		"8"
+		"mode"		"joystick_mouse"
+		"name"		"Right Joystick Mouse"
+		"inputs"
+		{
+			"click"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"mouse_button LEFT, , "
 						}
 					}
 				}
@@ -296,6 +366,8 @@
 			"4"		"left_trigger active"
 			"5"		"right_trigger active"
 			"6"		"switch active"
+			"7"		"left_trackpad active"
+			"8"		"right_joystick active"
 		}
 	}
 }

@@ -586,19 +586,54 @@ class ROMDownloader:
             widget.bind('<space>', lambda e, w=widget: w.invoke())
             widget.bind('<Return>', lambda e, w=widget: w.invoke())
         
-        # Global hotkeys for common actions (Steam Deck buttons - map in controller settings)
-        # Map these in Steam Input: F1 to B button, F2 to X button
-        self.root.bind('<F1>', lambda e: self.go_back())  # B button - Go Back
+        # Global hotkeys for Steam Deck controller
+        self.root.bind('<Escape>', lambda e: self.go_back())     # B button - Go Back
+        self.root.bind('<F1>', lambda e: self.go_back())         # B button (alt mapping)
         self.root.bind('<F2>', lambda e: self.trigger_download())  # X button - Download
-        
-        # Trigger buttons for fast navigation through large lists
-        # Map these in Steam Input: F3 to Left Trigger, F4 to Right Trigger
-        self.root.bind('<F3>', lambda e: self.skip_backward())  # Left Trigger - Skip Backward
-        self.root.bind('<F4>', lambda e: self.skip_forward())  # Right Trigger - Skip Forward
-        
+        self.root.bind('<F3>', lambda e: self.skip_backward())   # Left Trigger
+        self.root.bind('<F4>', lambda e: self.skip_forward())    # Right Trigger
+
+        # Root-level arrow key bindings so d-pad/trackpad works even without widget focus
+        self.root.bind('<Up>', self._global_up)
+        self.root.bind('<Down>', self._global_down)
+        self.root.bind('<Left>', self._global_left)
+        self.root.bind('<Right>', self._global_right)
+
         # Set initial focus to Connect button
         self.connect_btn.focus_set()
     
+    def _global_up(self, event=None):
+        """Root-level Up handler - delegates to focused widget or sets focus."""
+        focused = self.root.focus_get()
+        if focused in self.focusable_widgets:
+            return self.focus_prev(event)
+        self.focusable_widgets[0].focus_set()
+        return "break"
+
+    def _global_down(self, event=None):
+        """Root-level Down handler - delegates to focused widget or sets focus."""
+        focused = self.root.focus_get()
+        if focused in self.focusable_widgets:
+            return self.focus_next(event)
+        self.focusable_widgets[0].focus_set()
+        return "break"
+
+    def _global_left(self, event=None):
+        """Root-level Left handler."""
+        focused = self.root.focus_get()
+        if focused in self.focusable_widgets:
+            return self.focus_prev(event)
+        self.focusable_widgets[0].focus_set()
+        return "break"
+
+    def _global_right(self, event=None):
+        """Root-level Right handler."""
+        focused = self.root.focus_get()
+        if focused in self.focusable_widgets:
+            return self.focus_next(event)
+        self.focusable_widgets[0].focus_set()
+        return "break"
+
     def trigger_download(self):
         """Trigger download if button is enabled"""
         if self.download_btn['state'] != tk.DISABLED:
