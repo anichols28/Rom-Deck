@@ -14,6 +14,8 @@ import hashlib
 import platform
 import io
 
+APP_VERSION = "1.0.4"
+
 def install_pip_if_needed():
     """Try to install pip on Steam Deck if missing"""
     try:
@@ -349,6 +351,16 @@ class ROMDownloader:
         # Main container with padding
         main_container = ttk.Frame(self.root, style='Modern.TFrame')
         main_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+
+        # Version label — small, muted, bottom-right corner
+        self.version_label = tk.Label(
+            self.root,
+            text=f"v{APP_VERSION}",
+            fg=self.text_secondary,
+            bg=self.bg_primary,
+            font=('Segoe UI', 7),
+        )
+        self.version_label.place(relx=1.0, rely=1.0, x=-6, y=-4, anchor='se')
         
         # === TOP SECTION: Connection & Settings ===
         top_card = ttk.Frame(main_container, style='Card.TFrame')
@@ -1954,15 +1966,30 @@ class ROMDownloader:
                     self.selected_label.config(text="Selected: 0")
                     self.download_btn.config(state=tk.DISABLED)
     
+    def _ui_call(self, fn, *args, **kwargs):
+        """Schedule a UI mutation on the main thread. Safe to call from any thread."""
+        try:
+            self.root.after(0, lambda: fn(*args, **kwargs))
+        except (RuntimeError, tk.TclError):
+            pass
+
+    def _set_status(self, text, color=None):
+        """Thread-safe status label update."""
+        fg = color if color is not None else self.text_primary
+        self._ui_call(self.status_label.config, text=text, fg=fg)
+
     def update_progress_bar(self, percent):
-        """Update progress bar"""
-        self.root.update_idletasks()
-        width = self.progress_canvas.winfo_width()
-        if width <= 1:
-            width = 1200
-        new_width = int((percent / 100.0) * width)
-        self.progress_canvas.coords(self.progress_rect, 0, 0, new_width, 20)
-        self.progress_canvas.update()
+        """Thread-safe progress bar update."""
+        def _do_update():
+            try:
+                width = self.progress_canvas.winfo_width()
+                if width <= 1:
+                    width = 1200
+                new_width = int((percent / 100.0) * width)
+                self.progress_canvas.coords(self.progress_rect, 0, 0, new_width, 20)
+            except tk.TclError:
+                pass
+        self._ui_call(_do_update)
     
     def calculate_eta(self, bytes_remaining, speed_bytes_per_sec):
         """Calculate ETA"""
@@ -2030,10 +2057,8 @@ class ROMDownloader:
         start_time = time.time()
         total_bytes = 0
         
-        self.status_label.config(text=f"Downloading {total_items} item(s)...", fg=self.text_primary)
-        self.status_label.update()
-        self.root.update()
-        
+        self._set_status(f"Downloading {total_items} item(s)...")
+
         for index, (source, name, is_folder, destination) in enumerate(items_to_download):
             if self.cancel_download_flag:
                 break
@@ -2058,15 +2083,14 @@ class ROMDownloader:
             elapsed = time.time() - start_time
             avg_speed_mbps = (total_bytes / (1024 * 1024)) / elapsed if elapsed > 0 else 0
             self.update_progress_bar(100)
-            self.status_label.config(text=f"✓ Complete! {total_items} item(s) | Avg: {avg_speed_mbps:.1f} MB/s", 
-                                    fg=self.accent_green)
-            self.status_label.update()
+            self._set_status(f"✓ Complete! {total_items} item(s) | Avg: {avg_speed_mbps:.1f} MB/s",
+                             self.accent_green)
             time.sleep(3)
-        
+
         self.update_progress_bar(0)
-        self.status_label.config(text="Ready to download", fg=self.text_secondary)
-        self.download_btn.config(state=tk.NORMAL)
-        self.cancel_btn.config(state=tk.DISABLED)
+        self._set_status("Ready to download", self.text_secondary)
+        self._ui_call(self.download_btn.config, state=tk.NORMAL)
+        self._ui_call(self.cancel_btn.config, state=tk.DISABLED)
         self.downloading = False
     
     def download_sftp_file(self, source, destination, filename, current, total):
@@ -2074,9 +2098,7 @@ class ROMDownloader:
         if not self._ensure_sftp_connected():
             return 0
 
-        self.status_label.config(text=f"[{current}/{total}] Starting SFTP download...", fg=self.text_primary)
-        self.status_label.update()
-        self.root.update()
+        self._set_status(f"[{current}/{total}] Starting SFTP download...")
 
         try:
             attr = self.sftp_client.stat(source)
@@ -2106,23 +2128,21 @@ class ROMDownloader:
                         eta = self.calculate_eta(bytes_remaining, speed_bytes)
                         
                         status = f"[{current}/{total}] {progress:.0f}% | {speed_mbps:.1f} MB/s | ETA: {eta}"
-                        self.status_label.config(text=status, fg=self.text_primary)
-                        self.status_label.update()
+                        self._set_status(status)
                         last_update = current_time
-                    
+
                     time.sleep(0.001)
-            
+
             self.update_progress_bar(100)
-            self.status_label.config(text=f"[{current}/{total}] 100% | Complete", fg=self.text_primary)
-            self.status_label.update()
-            
+            self._set_status(f"[{current}/{total}] 100% | Complete")
+
             return file_size
-        
+
         except Exception as e:
             if not self.cancel_download_flag:
-                messagebox.showerror("Error", f"SFTP download failed: {str(e)}")
+                self._ui_call(messagebox.showerror, "Error", f"SFTP download failed: {str(e)}")
             return 0
-    
+
     def download_sftp_folder(self, source, destination, folder_name, current, total):
         """Download entire folder via SFTP"""
         if not self._ensure_sftp_connected():
@@ -2131,10 +2151,8 @@ class ROMDownloader:
         total_bytes = 0
         start_time = time.time()
 
-        self.status_label.config(text=f"[{current}/{total}] Preparing {folder_name}...", fg=self.text_primary)
-        self.status_label.update()
-        self.root.update()
-        
+        self._set_status(f"[{current}/{total}] Preparing {folder_name}...")
+
         try:
             # Count files recursively
             def count_files(path):
@@ -2153,12 +2171,10 @@ class ROMDownloader:
             total_files = count_files(source)
             files_copied = 0
             
-            self.status_label.config(text=f"[{current}/{total}] {folder_name}: Starting {total_files} files...")
-            self.status_label.update()
-            self.root.update()
-            
+            self._set_status(f"[{current}/{total}] {folder_name}: Starting {total_files} files...")
+
             os.makedirs(destination, exist_ok=True)
-            
+
             def download_recursive(remote_dir, local_dir):
                 nonlocal total_bytes, files_copied
                 
@@ -2187,40 +2203,33 @@ class ROMDownloader:
                                 self.update_progress_bar(progress)
                             
                             status = f"[{current}/{total}] {folder_name}: {files_copied}/{total_files} files | {speed_mbps:.1f} MB/s"
-                            self.status_label.config(text=status, fg=self.text_primary)
-                            self.status_label.update()
-                            self.progress_canvas.update()
-                            self.root.update()
+                            self._set_status(status)
                             time.sleep(0.05)
                         except Exception as e:
                             if not self.cancel_download_flag:
                                 print(f"Error downloading {item.filename}: {str(e)}")
-            
+
             download_recursive(source, destination)
-            
+
         except Exception as e:
             if not self.cancel_download_flag:
-                messagebox.showerror("Error", f"SFTP folder download failed: {str(e)}")
-        
+                self._ui_call(messagebox.showerror, "Error", f"SFTP folder download failed: {str(e)}")
+
         return total_bytes
     
     def download_folder_with_progress(self, source, destination, folder_name, current, total):
         """Download entire folder"""
         total_bytes = 0
         start_time = time.time()
-        
-        self.status_label.config(text=f"[{current}/{total}] Preparing {folder_name}...", fg=self.text_primary)
-        self.status_label.update()
-        self.root.update()
-        
+
+        self._set_status(f"[{current}/{total}] Preparing {folder_name}...")
+
         try:
             total_files = sum([len(files) for _, _, files in os.walk(source)])
             files_copied = 0
-            
-            self.status_label.config(text=f"[{current}/{total}] {folder_name}: Starting {total_files} files...")
-            self.status_label.update()
-            self.root.update()
-            
+
+            self._set_status(f"[{current}/{total}] {folder_name}: Starting {total_files} files...")
+
             os.makedirs(destination, exist_ok=True)
             
             for dirpath, dirnames, filenames in os.walk(source):
@@ -2252,26 +2261,21 @@ class ROMDownloader:
                             self.update_progress_bar(progress)
                         
                         status = f"[{current}/{total}] {folder_name}: {files_copied}/{total_files} files | {speed_mbps:.1f} MB/s"
-                        self.status_label.config(text=status, fg=self.text_primary)
-                        self.status_label.update()
-                        self.progress_canvas.update()
-                        self.root.update()
+                        self._set_status(status)
                         time.sleep(0.05)
                     except Exception as e:
                         if not self.cancel_download_flag:
                             print(f"Error copying {filename}: {str(e)}")
-        
+
         except Exception as e:
             if not self.cancel_download_flag:
-                messagebox.showerror("Error", f"Folder download failed: {str(e)}")
-        
+                self._ui_call(messagebox.showerror, "Error", f"Folder download failed: {str(e)}")
+
         return total_bytes
     
     def download_with_progress(self, source, destination, filename, current, total):
-        self.status_label.config(text=f"[{current}/{total}] Starting download...", fg=self.text_primary)
-        self.status_label.update()
-        self.root.update()
-        
+        self._set_status(f"[{current}/{total}] Starting download...")
+
         try:
             file_size = os.path.getsize(source)
             chunk_size = 128 * 1024
@@ -2299,21 +2303,19 @@ class ROMDownloader:
                         eta = self.calculate_eta(bytes_remaining, speed_bytes)
                         
                         status = f"[{current}/{total}] {progress:.0f}% | {speed_mbps:.1f} MB/s | ETA: {eta}"
-                        self.status_label.config(text=status, fg=self.text_primary)
-                        self.status_label.update()
+                        self._set_status(status)
                         last_update = current_time
-                    
+
                     time.sleep(0.001)
-            
+
             self.update_progress_bar(100)
-            self.status_label.config(text=f"[{current}/{total}] 100% | Complete", fg=self.text_primary)
-            self.status_label.update()
-            
+            self._set_status(f"[{current}/{total}] 100% | Complete")
+
             return file_size
-        
+
         except Exception as e:
             if not self.cancel_download_flag:
-                messagebox.showerror("Error", f"Download failed: {str(e)}")
+                self._ui_call(messagebox.showerror, "Error", f"Download failed: {str(e)}")
             return 0
     
     def cancel_download(self):
