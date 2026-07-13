@@ -383,10 +383,14 @@ class ROMDownloader:
         self.path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
         self.path_entry.set(self.network_path or "Z:\\ROMS or sftp://user@host/path")
         
-        self.connect_btn = ttk.Button(path_input_frame, text="Connect", command=self.connect_drive, 
+        self.connect_btn = ttk.Button(path_input_frame, text="Connect", command=self.connect_drive,
                   style='Accent.TButton', width=12)
         self.connect_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
+
+        self.change_login_btn = ttk.Button(path_input_frame, text="Change Login", command=self.change_saved_login,
+                  style='Modern.TButton', width=13)
+        self.change_login_btn.pack(side=tk.LEFT, padx=(0, 10))
+
         # Auto-connect checkbox
         self.auto_connect_var = tk.BooleanVar(value=self.auto_connect)
         auto_connect_check = ttk.Checkbutton(path_input_frame, text="Auto-connect", 
@@ -1046,7 +1050,18 @@ class ROMDownloader:
         if encrypted:
             return self._decrypt_password(encrypted)
         return None
-    
+
+    def forget_password(self, host, user):
+        """Remove a saved password for SFTP connection"""
+        try:
+            key = f"{user}@{host}"
+            if key in self.saved_passwords:
+                del self.saved_passwords[key]
+                with open(self.passwords_file, 'w') as f:
+                    json.dump(self.saved_passwords, f)
+        except Exception as e:
+            print(f"Could not forget password: {e}")
+
     def add_to_recent_connections(self, path):
         """Add path to recent connections (max 10)"""
         if path in self.recent_connections:
@@ -1071,11 +1086,151 @@ class ROMDownloader:
             }
         return None
     
+    def prompt_for_password(self, user, host, message=None):
+        """Show a password entry dialog with a 'remember' checkbox.
+        Returns (password, remember) or (None, False) if cancelled."""
+        password_dialog = tk.Toplevel(self.root)
+        password_dialog.title("SFTP Password")
+        password_dialog.geometry("400x200")
+        password_dialog.configure(bg=self.bg_secondary)
+        password_dialog.transient(self.root)
+        password_dialog.grab_set()
+
+        # Center the dialog
+        password_dialog.update_idletasks()
+        x = (password_dialog.winfo_screenwidth() // 2) - (400 // 2)
+        y = (password_dialog.winfo_screenheight() // 2) - (200 // 2)
+        password_dialog.geometry(f"400x200+{x}+{y}")
+
+        result = {'password': None, 'remember': False}
+
+        # Label
+        label = tk.Label(
+            password_dialog,
+            text=message or f"Enter password for {user}@{host}:",
+            bg=self.bg_secondary,
+            fg=self.text_primary,
+            font=('Segoe UI', 10),
+            wraplength=360,
+            justify=tk.LEFT
+        )
+        label.pack(pady=(20, 10))
+
+        # Password entry
+        password_entry = tk.Entry(
+            password_dialog,
+            show='*',
+            bg=self.bg_tertiary,
+            fg=self.text_primary,
+            font=('Segoe UI', 11),
+            insertbackground=self.text_primary
+        )
+        password_entry.pack(pady=10, padx=20, fill=tk.X)
+        password_entry.focus()
+
+        # Remember password checkbox
+        remember_var = tk.BooleanVar(value=True)
+        remember_check = tk.Checkbutton(
+            password_dialog,
+            text="Remember password",
+            variable=remember_var,
+            bg=self.bg_secondary,
+            fg=self.text_primary,
+            selectcolor=self.bg_tertiary,
+            activebackground=self.bg_secondary,
+            activeforeground=self.text_primary,
+            font=('Segoe UI', 10)
+        )
+        remember_check.pack(pady=5)
+
+        def on_ok():
+            result['password'] = password_entry.get()
+            result['remember'] = remember_var.get()
+            password_dialog.destroy()
+
+        def on_cancel():
+            password_dialog.destroy()
+
+        # Buttons
+        button_frame = tk.Frame(password_dialog, bg=self.bg_secondary)
+        button_frame.pack(pady=10)
+
+        ok_btn = tk.Button(
+            button_frame,
+            text="OK",
+            command=on_ok,
+            bg=self.accent_blue,
+            fg='white',
+            font=('Segoe UI', 10, 'bold'),
+            padx=20,
+            pady=5,
+            relief=tk.FLAT,
+            cursor='hand2'
+        )
+        ok_btn.pack(side=tk.LEFT, padx=5)
+
+        cancel_btn = tk.Button(
+            button_frame,
+            text="Cancel",
+            command=on_cancel,
+            bg=self.bg_tertiary,
+            fg=self.text_primary,
+            font=('Segoe UI', 10, 'bold'),
+            padx=20,
+            pady=5,
+            relief=tk.FLAT,
+            cursor='hand2'
+        )
+        cancel_btn.pack(side=tk.LEFT, padx=5)
+
+        # Bind Enter key to OK
+        password_entry.bind('<Return>', lambda e: on_ok())
+        password_dialog.bind('<Escape>', lambda e: on_cancel())
+
+        # Wait for dialog to close
+        self.root.wait_window(password_dialog)
+
+        return result['password'], result['remember']
+
+    def change_saved_login(self):
+        """Let the user update the saved password for the current SFTP connection."""
+        path = self.path_entry.get().strip()
+        connection_info = self.parse_sftp_url(path) if path.startswith('sftp://') else None
+        if not connection_info:
+            messagebox.showinfo("Change Login", "Enter an sftp:// connection path first, then click Change Login.")
+            return
+
+        password, remember = self.prompt_for_password(
+            connection_info['user'], connection_info['host'],
+            message=f"Enter new password for {connection_info['user']}@{connection_info['host']}:"
+        )
+        if not password:
+            return
+
+        if remember:
+            self.save_password(connection_info['host'], connection_info['user'], password)
+        else:
+            self.forget_password(connection_info['host'], connection_info['user'])
+
+        currently_connected = (
+            self.sftp_connection_info
+            and self.sftp_connection_info.get('host') == connection_info['host']
+            and self.sftp_connection_info.get('user') == connection_info['user']
+        )
+
+        if currently_connected and messagebox.askyesno("Reconnect", "Reconnect now using the new password?"):
+            connection_info['password'] = password
+            if self.connect_sftp(connection_info):
+                self.status_label.config(text=f"✓ SFTP connected to {connection_info['host']}", fg=self.accent_green)
+                self.load_files()
+        else:
+            messagebox.showinfo("Change Login", "Saved credentials updated.")
+
     def connect_sftp(self, connection_info):
         """Connect to SFTP server"""
         if not SFTP_AVAILABLE:
             response = messagebox.showerror(
-                "SFTP Not Available", 
+                "SFTP Not Available",
                 "SFTP support requires the 'paramiko' package.\n\n"
                 "The application attempted to install it automatically.\n"
                 "Please restart the application to enable SFTP.\n\n"
@@ -1083,143 +1238,42 @@ class ROMDownloader:
                 "pip install paramiko"
             )
             return False
-        
-        try:
-            # Close existing connection if any
-            self.disconnect_sftp()
-            
-            self.ssh_client = paramiko.SSHClient()
 
-            # Load known hosts if available
-            known_hosts_file = Path.home() / ".ssh" / "known_hosts"
-            if known_hosts_file.exists():
-                try:
-                    self.ssh_client.load_host_keys(str(known_hosts_file))
-                except:
-                    pass
+        password = connection_info['password']
+        save_password = False
+        used_saved_password = False
 
-            # Auto-accept host keys (for personal use)
-            self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            
-            password = connection_info['password']
-            save_password = False
-            
-            # If no password in URL, check saved passwords first
+        # If no password in URL, check saved passwords first
+        if not password:
+            password = self.get_saved_password(connection_info['host'], connection_info['user'])
+            if password:
+                used_saved_password = True
+
+        # If still no password, prompt for it
+        if not password:
+            password, save_password = self.prompt_for_password(connection_info['user'], connection_info['host'])
             if not password:
-                password = self.get_saved_password(connection_info['host'], connection_info['user'])
-                
-            # If still no password, prompt for it
-            if not password:
-                from tkinter import simpledialog
-                
-                # Create custom dialog for password with remember checkbox
-                password_dialog = tk.Toplevel(self.root)
-                password_dialog.title("SFTP Password")
-                password_dialog.geometry("400x200")
-                password_dialog.configure(bg=self.bg_secondary)
-                password_dialog.transient(self.root)
-                password_dialog.grab_set()
-                
-                # Center the dialog
-                password_dialog.update_idletasks()
-                x = (password_dialog.winfo_screenwidth() // 2) - (400 // 2)
-                y = (password_dialog.winfo_screenheight() // 2) - (200 // 2)
-                password_dialog.geometry(f"400x200+{x}+{y}")
-                
-                result = {'password': None, 'remember': False}
-                
-                # Label
-                label = tk.Label(
-                    password_dialog,
-                    text=f"Enter password for {connection_info['user']}@{connection_info['host']}:",
-                    bg=self.bg_secondary,
-                    fg=self.text_primary,
-                    font=('Segoe UI', 10)
-                )
-                label.pack(pady=(20, 10))
-                
-                # Password entry
-                password_entry = tk.Entry(
-                    password_dialog,
-                    show='*',
-                    bg=self.bg_tertiary,
-                    fg=self.text_primary,
-                    font=('Segoe UI', 11),
-                    insertbackground=self.text_primary
-                )
-                password_entry.pack(pady=10, padx=20, fill=tk.X)
-                password_entry.focus()
-                
-                # Remember password checkbox
-                remember_var = tk.BooleanVar(value=True)
-                remember_check = tk.Checkbutton(
-                    password_dialog,
-                    text="Remember password",
-                    variable=remember_var,
-                    bg=self.bg_secondary,
-                    fg=self.text_primary,
-                    selectcolor=self.bg_tertiary,
-                    activebackground=self.bg_secondary,
-                    activeforeground=self.text_primary,
-                    font=('Segoe UI', 10)
-                )
-                remember_check.pack(pady=5)
-                
-                def on_ok():
-                    result['password'] = password_entry.get()
-                    result['remember'] = remember_var.get()
-                    password_dialog.destroy()
-                
-                def on_cancel():
-                    password_dialog.destroy()
-                
-                # Buttons
-                button_frame = tk.Frame(password_dialog, bg=self.bg_secondary)
-                button_frame.pack(pady=10)
-                
-                ok_btn = tk.Button(
-                    button_frame,
-                    text="OK",
-                    command=on_ok,
-                    bg=self.accent_blue,
-                    fg='white',
-                    font=('Segoe UI', 10, 'bold'),
-                    padx=20,
-                    pady=5,
-                    relief=tk.FLAT,
-                    cursor='hand2'
-                )
-                ok_btn.pack(side=tk.LEFT, padx=5)
-                
-                cancel_btn = tk.Button(
-                    button_frame,
-                    text="Cancel",
-                    command=on_cancel,
-                    bg=self.bg_tertiary,
-                    fg=self.text_primary,
-                    font=('Segoe UI', 10, 'bold'),
-                    padx=20,
-                    pady=5,
-                    relief=tk.FLAT,
-                    cursor='hand2'
-                )
-                cancel_btn.pack(side=tk.LEFT, padx=5)
-                
-                # Bind Enter key to OK
-                password_entry.bind('<Return>', lambda e: on_ok())
-                password_dialog.bind('<Escape>', lambda e: on_cancel())
-                
-                # Wait for dialog to close
-                self.root.wait_window(password_dialog)
-                
-                password = result['password']
-                save_password = result['remember']
-                
-                if not password:
-                    return False
-            
-            # Connect with password
+                return False
+
+        # Try connecting; if a saved password is rejected, let the user enter a new one
+        for attempt in range(2):
             try:
+                # Close existing connection if any
+                self.disconnect_sftp()
+
+                self.ssh_client = paramiko.SSHClient()
+
+                # Load known hosts if available
+                known_hosts_file = Path.home() / ".ssh" / "known_hosts"
+                if known_hosts_file.exists():
+                    try:
+                        self.ssh_client.load_host_keys(str(known_hosts_file))
+                    except:
+                        pass
+
+                # Auto-accept host keys (for personal use)
+                self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
                 self.ssh_client.connect(
                     connection_info['host'],
                     port=connection_info['port'],
@@ -1229,7 +1283,7 @@ class ROMDownloader:
                     look_for_keys=True,
                     allow_agent=True
                 )
-                
+
                 # Keep connection alive during long browsing sessions
                 transport = self.ssh_client.get_transport()
                 if transport:
@@ -1248,10 +1302,23 @@ class ROMDownloader:
                 # Save password if requested
                 if save_password and password:
                     self.save_password(connection_info['host'], connection_info['user'], password)
-                
+
                 return True
-                
+
             except paramiko.AuthenticationException as e:
+                if used_saved_password:
+                    # The previously-working saved password no longer works (changed on
+                    # the server) — drop it and let the user enter the new credentials.
+                    self.forget_password(connection_info['host'], connection_info['user'])
+                    used_saved_password = False
+                    password, save_password = self.prompt_for_password(
+                        connection_info['user'], connection_info['host'],
+                        message=(f"Saved password for {connection_info['user']}@{connection_info['host']} "
+                                 f"was rejected.\nEnter the new password:")
+                    )
+                    if not password:
+                        return False
+                    continue
                 messagebox.showerror("SFTP Error", f"Authentication failed. Check your username and password.\n\n{str(e)}")
                 return False
             except paramiko.SSHException as e:
@@ -1259,12 +1326,10 @@ class ROMDownloader:
                 return False
             except Exception as e:
                 messagebox.showerror("SFTP Error", f"Connection failed: {str(e)}")
+                self.disconnect_sftp()
                 return False
-            
-        except Exception as e:
-            messagebox.showerror("SFTP Error", f"Setup failed: {str(e)}")
-            self.disconnect_sftp()
-            return False
+
+        return False
     
     def disconnect_sftp(self):
         """Close SFTP connection"""
